@@ -1,0 +1,41 @@
+{% extends 'recipes/base.html' %}
+{% block title %}Файлы{% endblock %}
+
+{% block content %}
+<h1>Содержимое всех файлов</h1>
+
+{% if empty %}
+    <p><strong>На сервере нет ни одного файла с данными.</strong></p>
+{% else %}
+    {% for f in files %}
+        <div class="card">
+            <h3>{{ f.filename }} <small>({{ f.ext }})</small></h3>
+            {% if f.error %}
+                <p style="color:red">Ошибка: {{ f.error }}</p>
+            {% else %}
+                <p>Рецептов в файле: {{ f.recipes|length }}</p>
+                <table>
+                    <tr>
+                        <th>Название</th><th>Ингредиенты</th>
+                        <th>Время</th><th>Сложность</th><th>Описание</th>
+                    </tr>
+                    {% for r in f.recipes %}
+                        <tr>
+                            <td>{{ r.name }}</td>
+                            <td>{{ r.ingredients }}</td>
+                            <td>{{ r.cooking_time }}</td>
+                            <td>{{ r.difficulty }}</td>
+                            <td>{{ r.description }}</td>
+                        </tr>
+                    {% endfor %}
+                </table>
+                <details><summary>Сырое содержимое</summary><pre>{{ f.raw }}</pre></details>
+            {% endif %}
+            <p>
+                <a href="{% url 'view_file' f.filename %}">Открыть отдельно</a> ·
+                <a href="{% url 'delete_file' f.filename %}" onclick="return confirm('Удалить?');">Удалить</a>
+            </p>
+        </div>
+    {% endfor %}
+{% endif %}
+{% endblock %}

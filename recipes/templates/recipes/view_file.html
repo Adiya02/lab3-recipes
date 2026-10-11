@@ -1,0 +1,27 @@
+{% extends 'recipes/base.html' %}
+{% block title %}{{ info.filename }}{% endblock %}
+
+{% block content %}
+<h1>Файл: {{ info.filename }}</h1>
+
+{% if error %}
+    <p style="color:red">Ошибка: {{ error }}</p>
+{% else %}
+    <h2>Разобранные данные</h2>
+    {% for r in info.recipes %}
+        <div class="card">
+            <h3>{{ r.name }}</h3>
+            <ul>
+                <li><b>Ингредиенты:</b> {{ r.ingredients }}</li>
+                <li><b>Время:</b> {{ r.cooking_time }} мин</li>
+                <li><b>Сложность:</b> {{ r.difficulty }}</li>
+                <li><b>Описание:</b> {{ r.description }}</li>
+            </ul>
+        </div>
+    {% endfor %}
+    <h2>Сырое содержимое</h2>
+    <pre>{{ info.raw }}</pre>
+{% endif %}
+
+<p><a href="{% url 'files' %}">← Назад к списку</a></p>
+{% endblock %}

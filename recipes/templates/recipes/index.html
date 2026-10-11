@@ -1,0 +1,39 @@
+{% extends 'recipes/base.html' %}
+{% block title %}Добавить рецепт{% endblock %}
+
+{% block content %}
+<h1>Добавить рецепт</h1>
+
+<form method="post" action="{% url 'add_recipe' %}">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <p>
+        <button type="submit" name="fmt" value="json">Сохранить в JSON</button>
+        <button type="submit" name="fmt" value="xml">Сохранить в XML</button>
+    </p>
+</form>
+
+<hr>
+<h2>Загрузить файл с рецептами (.json / .xml)</h2>
+<form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="datafile" accept=".json,.xml" required>
+    <button type="submit">Загрузить</button>
+</form>
+
+<hr>
+<h2>Файлы на сервере</h2>
+{% if files %}
+    <ul>
+        {% for f in files %}
+            <li>
+                <a href="{% url 'view_file' f.name %}">{{ f.name }}</a>
+                ({{ f.size }} байт)
+            </li>
+        {% endfor %}
+    </ul>
+    <p><a href="{% url 'files' %}">Показать содержимое всех файлов →</a></p>
+{% else %}
+    <p><em>Пока нет ни одного файла.</em></p>
+{% endif %}
+{% endblock %}
