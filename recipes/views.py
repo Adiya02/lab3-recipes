@@ -2,8 +2,11 @@ import os
 
 from django.contrib import messages
 from django.shortcuts import render, redirect
-
+from .models import Recipe
 from .forms import RecipeForm
+from django.http import JsonResponse
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from .services import (
     DATA_DIR,
     save_recipe_to_file,
@@ -13,7 +16,6 @@ from .services import (
     read_data_file,
     list_data_files,
 )
-
 
 def index(request):
     form = RecipeForm()
@@ -27,17 +29,33 @@ def add_recipe(request):
 
     form = RecipeForm(request.POST)
     fmt = request.POST.get('fmt', 'json')
-    if fmt not in ('json', 'xml'):
+    if fmt not in ('json', 'xml', 'db'):
         fmt = 'json'
 
     if not form.is_valid():
         files = list_data_files()
         return render(request, 'recipes/index.html', {'form': form, 'files': files})
 
-    recipe = form.save()
-    filename = save_recipe_to_file(recipe, fmt)
-    messages.success(request, f'Рецепт «{recipe.name}» сохранён в файл {filename}')
-    return redirect('index')
+    if fmt == 'db':
+        name = form.cleaned_data['name']
+        # Проверка на дубликат (по названию рецепта, без учета регистра)
+        if Recipe.objects.filter(name__iexact=name).exists():
+            messages.error(request, f'Рецепт с названием «{name}» уже существует в базе данных.')
+            files = list_data_files()
+            return render(request, 'recipes/index.html', {'form': form, 'files': files})
+        
+        # Если дубликата нет — сохраняем в БД
+        recipe = form.save()
+        messages.success(request, f'Рецепт «{recipe.name}» успешно сохранён в базу данных!')
+        return redirect('index')
+
+    # Если выбрано сохранение в файл (JSON/XML)
+    else:
+        # commit=False создает объект в памяти, но НЕ сохраняет его в БД
+        recipe = form.save(commit=False) 
+        filename = save_recipe_to_file(recipe, fmt)
+        messages.success(request, f'Рецепт «{recipe.name}» сохранён в файл {filename}')
+        return redirect('index')
 
 
 def upload_file(request):
@@ -127,3 +145,64 @@ def delete_file(request, filename):
     else:
         messages.error(request, 'Файл не найден.')
     return redirect('files')
+
+def db_view(request):
+    recipes = Recipe.objects.all().order_by('-created_at')
+    return render(request, 'recipes/db.html', {'recipes': recipes})
+
+def search_recipes_ajax(request):
+    query = request.GET.get('q', '')
+    if query:
+        # Ищем совпадения по названию, ингредиентам или описанию
+        recipes = Recipe.objects.filter(
+            Q(name__icontains=query) |
+            Q(ingredients__icontains=query) |
+            Q(description__icontains=query)
+        ).order_by('-created_at')
+    else:
+        recipes = Recipe.objects.all().order_by('-created_at')
+
+    # Формируем список словарей для передачи в JSON
+    data = []
+    for r in recipes:
+        data.append({
+            'name': r.name,
+            'ingredients': r.ingredients,
+            'cooking_time': r.cooking_time,
+            'difficulty': r.get_difficulty_display(),
+            'description': r.description,
+        })
+    return JsonResponse({'recipes': data})
+
+def edit_recipe_ajax(request, pk):
+    recipe = get_object_or_404(Recipe, pk=pk)
+    
+    if request.method == 'GET':
+        # Отдаем данные рецепта для заполнения формы в модальном окне
+        data = {
+            'id': recipe.id,
+            'name': recipe.name,
+            'ingredients': recipe.ingredients,
+            'cooking_time': recipe.cooking_time,
+            'difficulty': recipe.difficulty,
+            'description': recipe.description,
+        }
+        return JsonResponse(data)
+        
+    elif request.method == 'POST':
+        # Сохраняем отредактированные данные
+        form = RecipeForm(request.POST, instance=recipe)
+        if form.is_valid():
+            form.save()
+            return JsonResponse({'success': True})
+        else:
+            # Если есть ошибки валидации (например, пустое имя), возвращаем их
+            return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+
+
+def delete_recipe_ajax(request, pk):
+    if request.method == 'POST':
+        recipe = get_object_or_404(Recipe, pk=pk)
+        recipe.delete()
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False}, status=400)
