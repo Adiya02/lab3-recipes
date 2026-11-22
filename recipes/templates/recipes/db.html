@@ -1,0 +1,199 @@
+{% extends 'recipes/base.html' %}
+
+{% block content %}
+<h2>Рецепты в базе данных</h2>
+
+<div style="margin-bottom: 20px;">
+    <input type="text" id="search-input" class="form-control" placeholder="Поиск по названию, ингредиентам или описанию...">
+</div>
+
+<table class="table table-striped" id="recipes-table">
+    <thead>
+        <tr>
+            <th>Название</th>
+            <th>Ингредиенты</th>
+            <th>Время (мин)</th>
+            <th>Сложность</th>
+            <th>Описание</th>
+            <th>Действия</th> <!-- ВОТ ОНА, 6-я колонка -->
+        </tr>
+    </thead>
+    <tbody id="table-body">
+        {% for recipe in recipes %}
+        <tr id="row-{{ recipe.id }}">
+            <td>{{ recipe.name }}</td>
+            <td>{{ recipe.ingredients }}</td>
+            <td>{{ recipe.cooking_time }}</td>
+            <td>{{ recipe.get_difficulty_display }}</td>
+            <td>{{ recipe.description }}</td>
+            <td>
+                <!-- Кнопки редактирования и удаления -->
+                <button class="btn btn-sm btn-warning edit-btn" data-id="{{ recipe.id }}" data-bs-toggle="modal" data-bs-target="#editModal">Ред.</button>
+                <button class="btn btn-sm btn-danger delete-btn" data-id="{{ recipe.id }}">Удал.</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Модальное окно для редактирования (всплывающее) -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="edit-form">
+                <div class="modal-header">
+                    <h5 class="modal-title">Редактировать рецепт</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit-id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" id="edit-name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Ингредиенты</label>
+                        <textarea class="form-control" id="edit-ingredients" name="ingredients" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Время готовки (мин)</label>
+                        <input type="number" class="form-control" id="edit-cooking_time" name="cooking_time" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Сложность</label>
+                        <select class="form-select" id="edit-difficulty" name="difficulty">
+                            <option value="easy">Легко</option>
+                            <option value="medium">Средне</option>
+                            <option value="hard">Сложно</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" id="edit-description" name="description"></textarea>
+                    </div>
+                    
+                    <!-- Блок для вывода ошибок валидации -->
+                    <div id="edit-errors" class="text-danger"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- 1. AJAX ПОИСК ---
+    const searchInput = document.getElementById('search-input');
+    const tableBody = document.getElementById('table-body');
+
+    function fetchRecipes(query) {
+        fetch(`/ajax/search/?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                tableBody.innerHTML = '';
+                if (data.recipes.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center">Ничего не найдено</td></tr>';
+                    return;
+                }
+                data.recipes.forEach(recipe => {
+                    const row = document.createElement('tr');
+                    row.id = `row-${recipe.id}`;
+                    // Обратите внимание: кнопки добавляются и при поиске тоже!
+                    row.innerHTML = `
+                        <td>${recipe.name}</td>
+                        <td>${recipe.ingredients}</td>
+                        <td>${recipe.cooking_time}</td>
+                        <td>${recipe.difficulty}</td>
+                        <td>${recipe.description}</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning edit-btn" data-id="${recipe.id}" data-bs-toggle="modal" data-bs-target="#editModal">Ред.</button>
+                            <button class="btn btn-sm btn-danger delete-btn" data-id="${recipe.id}">Удал.</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+                attachRowListeners(); 
+            });
+    }
+
+    let timeout = null;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => fetchRecipes(this.value.trim()), 300);
+    });
+
+    // --- 2. РЕДАКТИРОВАНИЕ И УДАЛЕНИЕ ---
+    const editForm = document.getElementById('edit-form');
+    
+    function attachRowListeners() {
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.dataset.id;
+                fetch(`/ajax/edit/${id}/`)
+                    .then(res => res.json())
+                    .then(data => {
+                        document.getElementById('edit-id').value = data.id;
+                        document.getElementById('edit-name').value = data.name;
+                        document.getElementById('edit-ingredients').value = data.ingredients;
+                        document.getElementById('edit-cooking_time').value = data.cooking_time;
+                        document.getElementById('edit-difficulty').value = data.difficulty;
+                        document.getElementById('edit-description').value = data.description;
+                        document.getElementById('edit-errors').innerHTML = '';
+                    });
+            });
+        });
+
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (!confirm('Вы уверены, что хотите удалить этот рецепт?')) return;
+                const id = this.dataset.id;
+                fetch(`/ajax/delete/${id}/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById(`row-${id}`).remove();
+                    }
+                });
+            });
+        });
+    }
+
+    attachRowListeners();
+
+    editForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const id = document.getElementById('edit-id').value;
+        const formData = new FormData(this);
+        
+        fetch(`/ajax/edit/${id}/`, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                let errorHtml = '<ul>';
+                for (let field in data.errors) {
+                    data.errors[field].forEach(error => {
+                        errorHtml += `<li>${field}: ${error}</li>`;
+                    });
+                }
+                errorHtml += '</ul>';
+                document.getElementById('edit-errors').innerHTML = errorHtml;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
