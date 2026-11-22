@@ -23,9 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-q8=5v#69z$d6fu5e)l3q+l+3_-m_@mew4xe5^=7r137c(3mpo#'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -76,7 +76,8 @@ WSGI_APPLICATION = 'lab3.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        # Если мы на хостинге Netrun, берем путь /data, иначе - локально
+        'NAME': '/data/db.sqlite3' if os.environ.get('NETRUN') else BASE_DIR / 'db.sqlite3',
     }
 }
 
